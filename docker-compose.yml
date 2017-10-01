@@ -1,0 +1,124 @@
+#
+# PAYER CI/CD environment
+# Source Url: http://www.macadamian.com/2017/02/07/creating-a-private-docker-registry/
+#
+
+version: '2'
+services:
+
+  haproxy:
+    container_name: haproxy
+    restart: always
+    build: ./docker/haproxy
+    image: payer/haproxy
+    links:
+      - registry
+      - registry-ui
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - registrynet
+    ports:
+      - '8000:80'
+      - '4443:443'
+      - '5000:5000'
+
+  registry:
+    restart: always
+    build: ./docker/registry
+    image: payer/registry
+    environment:
+      TCP_PORTS: '5000'
+      VIRTUAL_HOST: '*:5000, https://*:5000'
+      FORCE_SSL: 'true'
+      REGISTRY_STORAGE_DELETE_ENABLED: 'true'
+      REGISTRY_AUTH: 'htpasswd'
+      REGISTRY_AUTH_HTPASSWD_REALM: 'Registry Realm'
+      REGISTRY_AUTH_HTPASSWD_PATH: '/htpasswd_storage/htpasswd'
+    volumes:
+      - ./volumes/registry:/var/lib/registry
+    networks:
+      - registrynet
+    expose:
+     - 5000
+
+  registry-ui:
+    restart: always
+    build: ./docker/registry-ui
+    image: payer/registry-ui
+    environment:
+      VIRTUAL_HOST: '*, https://*'
+      ENV_DOCKER_REGISTRY_HOST: 'registry'
+      ENV_DOCKER_REGISTRY_PORT: 5000
+    links:
+      - registry
+    networks:
+      - registrynet
+    expose:
+      - 80
+
+  jenkins:
+    restart: always
+    container_name: jenkins
+    build: ./docker/jenkins
+    image: payer/jenkins
+    environment:
+      DOCKER_REGISTRY_URL: http://localhost:5000   # Point to hostname outside jenkins
+      DOCKER_REPOSITORY_NAME: localhost:5000/payer
+      DOCKER_USERNAME: admin
+      DOCKER_PASSWORD: bananskaLe
+    volumes:
+     - ./volumes/jenkins:/var/jenkins_home:z
+     - /var/run/docker.sock:/var/run/docker.sock
+     - /usr/bin/docker:/usr/bin/docker
+    networks:
+      - jiranet
+      - registrynet
+    ports:
+      - '49001:8080'
+
+  jira:
+    restart: always
+    container_name: jira
+    build: ./docker/jira
+    image: payer/jira
+    mem_limit: 2048m
+    environment:
+      JAVA_OPTS: "-Xmx1g -Xms512m -XX:MaxPermSize=2048m"
+      JVM_MINIMUM_MEMORY: 384m
+      JVM_MAXIMUM_MEMORY: 2g
+      JIRA_DATABASE_URL: mysql://jiradb@mysql/jiradb
+      JIRA_DB_PASSWORD: jellyfish
+      DOCKER_WAIT_HOST: mysql
+      DOCKER_WAIT_PORT: 3306
+    links:
+      - 'mysql:mysql'
+    volumes:
+      - ./volumes/jira:/var/atlassian/jira
+    networks:
+      - jiranet
+    ports:
+      - '49002:8080'
+
+  mysql:
+    restart: always
+    container_name: jira-mysql
+    build: ./docker/mysql
+    image: payer/mysql
+    environment:
+       MYSQL_ROOT_PASSWORD: somesecretpassword
+       MYSQL_DATABASE: jiradb
+       MYSQL_USER: jiradb
+       MYSQL_PASSWORD: jellyfish
+    volumes:
+      - ./volumes/mysql:/var/lib/mysql
+    networks:
+      - jiranet
+    ports:
+     - '3306:3306'
+
+networks:
+  registrynet:
+    driver: bridge
+  jiranet:
+    driver: bridge
