@@ -1,5 +1,4 @@
-![Payer Logotype](http://payer.se/public/PAYER_SUSTAINABLE_PAYMENTS_LOGO.png)
-# Payer Autonomous & CI Environment
+# Continuous Integration & Delivery environment
 
 This is a base line environment for Autonomous Testing and Continuous Integration using Jenkins and the agile project management tool JIRA.
 
